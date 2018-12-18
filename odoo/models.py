@@ -2497,10 +2497,10 @@ class BaseModel(object):
                                         "Use a search view instead if you simply want to make the field searchable."
                                     _schema.warning(msg, self._table, field.type, name)
                             if res2 and not field.index:
-                                cr.execute('DROP INDEX "%s_%s_index"' % (self._table, name))
-                                cr.commit()
-                                msg = "Table '%s': dropping index for column '%s' of type '%s' as it is not required anymore"
-                                _schema.debug(msg, self._table, name, field.type)
+                                # cr.execute('DROP INDEX "%s_%s_index"' % (self._table, name))
+                                # cr.commit()
+                                msg = "Table '%s', column '%s': dropping indexes is disabled."
+                                _schema.debug(msg, self._table, name)
 
                             if field.type == 'many2one':
                                 comodel = self.env[field.comodel_name]
