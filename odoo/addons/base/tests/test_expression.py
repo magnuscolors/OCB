@@ -688,6 +688,16 @@ class TestAutoJoin(TransactionCase):
             'domain_force': "['|',('company_id','child_of',[user.company_id.id]),('company_id','=',False)]",
         })
         self.env(user=self.env.ref('base.user_demo'))['res.users'].search([])
+
+        # Test that outer join does not clash with inner join
+        rule = self.env['ir.rule'].create({
+            'model_id': self.env.ref('base.model_res_users').id,
+            'domain_force': ['|', ('partner_id.email', '=', False), ('partner_id.email', '!=', False)],
+        })
+        self.env(user=self.env.ref('base.user_demo'))['res.users'].search([('email', 'like', 'something')])
+        self.env(user=self.env.ref('base.user_demo'))['res.users'].search([
+            ('email', 'like', 'something'), ('partner_id.email', 'like', 'something')])
+
         patch_auto_join(user_obj, 'partner_id', False)
         patch_auto_join(partner_obj, 'company_id', False)
 

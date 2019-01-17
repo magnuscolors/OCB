@@ -358,6 +358,23 @@ def get_alias_from_query(from_query):
         return from_splitted[0].replace('"', ''), from_splitted[0].replace('"', '')
 
 
+def add_join_inner_first(table_joins, join_tuple):
+    """ Add `join_tuple` to `joins` unless the inner join version of
+    `join_tuple` is already in joins. If `join_tuple` is an inner join and
+    the outer join is already in `joins`, remove it first. """
+    inner_join = (join_tuple[0], join_tuple[1], join_tuple[2], 'JOIN')
+    outer_join = (join_tuple[0], join_tuple[1], join_tuple[2], 'LEFT JOIN')
+    if join_tuple == outer_join:
+        if inner_join in table_joins:
+            return False
+    if join_tuple == inner_join and outer_join in table_joins:
+        table_joins.remove(outer_join)
+    if join_tuple not in table_joins:
+        table_joins.append(join_tuple)
+        return True
+    return False
+
+
 def normalize_leaf(element):
     """ Change a term's operator to some canonical form, simplifying later
         processing. """
@@ -556,9 +573,7 @@ class ExtendedLeaf(object):
             previous_alias = alias
             alias = truncate_alias (alias + '__' + context[4])
             table_joins = contexts.setdefault(previous_alias, [])
-            join = (alias, context[2], context[3], context[5])
-            if join not in table_joins:
-                table_joins.append(join)
+            add_join_inner_first(table_joins, (alias, context[2], context[3], context[5]))
 
     def get_tables(self):
         tables = set()
