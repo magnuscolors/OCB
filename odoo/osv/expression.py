@@ -902,7 +902,21 @@ class expression(object):
             elif len(path) > 1 and field.store and field.type == 'one2many' and field.auto_join:
                 # res_partner.id = res_partner__bank_ids.partner_id
                 not_null_leafs = get_not_null_leafs(leaf, path[0], operator)
-                leaf.add_join_context(comodel, 'id', field.inverse_name, path[0], 'LEFT JOIN')
+                inverse_name = field.inverse_name
+                inverse = comodel._fields[field.inverse_name]
+                while inverse.inherited:
+                    # user_id.employee_ids.user_id:
+                    # res_users LEFT JOIN resource_resource as res_users__resource_id
+                    #     ON res_users.id = res_users__resource_id.user_id
+                    # LEFT JOIN hr_employee as res_users__resource_id__employee_ids
+                    #     ON res_users__resource_id.id = res_users__resource_id__employee_ids.resource_id
+                    parent_model = model.env[inverse.related_field.model_name]
+                    parent_fname = comodel._inherits[parent_model._name]
+                    leaf.add_join_context(parent_model, 'id', inverse_name, parent_fname, 'LEFT JOIN')
+                    parent_model._fields[inverse_name]
+                    inverse = parent_model._fields[inverse_name]
+                    inverse_name = parent_fname
+                leaf.add_join_context(comodel, 'id', inverse_name, path[0], 'LEFT JOIN')
                 domain = field.domain(model) if callable(field.domain) else field.domain
                 push(create_substitution_leaf(leaf, (path[1], operator, right), comodel))
                 if domain:
