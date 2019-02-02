@@ -108,7 +108,7 @@ class Query(object):
 
             :param extra_params: a list of parameters for the `extra` condition.
         """
-        from odoo.osv.expression import generate_table_alias
+        from odoo.osv.expression import generate_table_alias, add_join_inner_first
         (lhs, table, lhs_col, col, link) = connection
         alias, alias_statement = generate_table_alias(lhs, [(table, link)])
 
@@ -130,12 +130,13 @@ class Query(object):
                 pass
             else:
                 # add JOIN
-                self.tables.append(alias_statement)
                 join_tuple = (alias, lhs_col, col, outer and 'LEFT JOIN' or 'JOIN')
-                self.joins.setdefault(lhs, []).append(join_tuple)
-                if extra or extra_params:
-                    extra = (extra or '').format(lhs=lhs, rhs=alias)
-                    self.extras[(lhs, join_tuple)] = (extra, extra_params)
+                self.joins.setdefault(lhs, [])
+                if add_join_inner_first(self.joins[lhs], join_tuple):
+                    self.tables.append(alias_statement)
+                    if extra or extra_params:
+                        extra = (extra or '').format(lhs=lhs, rhs=alias)
+                        self.extras[(lhs, join_tuple)] = (extra, extra_params)
             return alias, alias_statement
 
     def get_sql(self):
@@ -183,6 +184,7 @@ class Query(object):
 
     def append(self, query):
         """ Include another query into self """
+        from odoo.osv.expression import add_join_inner_first
         self.where_clause += query.where_clause
         self.where_clause_params += query.where_clause_params
         for table in query.tables:
@@ -190,9 +192,8 @@ class Query(object):
                 self.tables.append(table)
         for join_table in query.joins:
             self.joins.setdefault(join_table, [])
-            for join in query.joins[join_table]:
-                if join not in self.joins[join_table]:
-                    self.joins[join_table].append(join)
+            for join_tuple in query.joins[join_table]:
+                add_join_inner_first(self.joins[join_table], join_tuple)
 
     def __add__(self, query):
         """ Return a new copy of `self` that includes `query` """

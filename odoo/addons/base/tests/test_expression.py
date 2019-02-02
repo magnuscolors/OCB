@@ -688,6 +688,33 @@ class TestAutoJoin(TransactionCase):
             'domain_force': "['|',('company_id','child_of',[user.company_id.id]),('company_id','=',False)]",
         })
         self.env(user=self.env.ref('base.user_demo'))['res.users'].search([])
+
+        # Test that outer join does not clash with inner join
+        rule = self.env['ir.rule'].create({
+            'model_id': self.env.ref('base.model_res_users').id,
+            'domain_force': ['|', ('partner_id.email', '=', False), ('partner_id.email', '!=', False)],
+        })
+        self.env(user=self.env.ref('base.user_demo'))['res.users'].search([('email', 'like', 'something')])
+        self.env(user=self.env.ref('base.user_demo'))['res.users'].search([
+            ('email', 'like', 'something'), ('partner_id.email', 'like', 'something')])
+
+        # Test one2many field with inherited inverse field
+        # (like res.users' employee_ids' inverse field 'user_id' is inherited from
+        #  the employee's resource_id)
+        self.env['ir.model.fields'].create({
+            'model_id': self.env['ir.model'].search([('model', '=', 'res.partner')]).id,
+            'name': 'x_child_users',
+            'field_description': 'Child Users',
+            'ttype': 'one2many',
+            'relation': 'res.users',
+            'relation_field': 'parent_id',
+        })
+        patch_auto_join(partner_obj, 'x_child_users', True)
+        self.env.ref('base.partner_demo').parent_id = self.env.ref('base.partner_root')
+        self.assertEqual(
+            self.env['res.partner'].search([('x_child_users.login', '=', 'demo')]),
+            self.env.ref('base.partner_root'))
+
         patch_auto_join(user_obj, 'partner_id', False)
         patch_auto_join(partner_obj, 'company_id', False)
 

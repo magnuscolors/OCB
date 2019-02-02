@@ -358,6 +358,23 @@ def get_alias_from_query(from_query):
         return from_splitted[0].replace('"', ''), from_splitted[0].replace('"', '')
 
 
+def add_join_inner_first(table_joins, join_tuple):
+    """ Add `join_tuple` to `joins` unless the inner join version of
+    `join_tuple` is already in joins. If `join_tuple` is an inner join and
+    the outer join is already in `joins`, remove it first. """
+    inner_join = (join_tuple[0], join_tuple[1], join_tuple[2], 'JOIN')
+    outer_join = (join_tuple[0], join_tuple[1], join_tuple[2], 'LEFT JOIN')
+    if join_tuple == outer_join:
+        if inner_join in table_joins:
+            return False
+    if join_tuple == inner_join and outer_join in table_joins:
+        table_joins.remove(outer_join)
+    if join_tuple not in table_joins:
+        table_joins.append(join_tuple)
+        return True
+    return False
+
+
 def normalize_leaf(element):
     """ Change a term's operator to some canonical form, simplifying later
         processing. """
@@ -556,9 +573,7 @@ class ExtendedLeaf(object):
             previous_alias = alias
             alias = truncate_alias (alias + '__' + context[4])
             table_joins = contexts.setdefault(previous_alias, [])
-            join = (alias, context[2], context[3], context[5])
-            if join not in table_joins:
-                table_joins.append(join)
+            add_join_inner_first(table_joins, (alias, context[2], context[3], context[5]))
 
     def get_tables(self):
         tables = set()
@@ -887,7 +902,21 @@ class expression(object):
             elif len(path) > 1 and field.store and field.type == 'one2many' and field.auto_join:
                 # res_partner.id = res_partner__bank_ids.partner_id
                 not_null_leafs = get_not_null_leafs(leaf, path[0], operator)
-                leaf.add_join_context(comodel, 'id', field.inverse_name, path[0], 'LEFT JOIN')
+                inverse_name = field.inverse_name
+                inverse = comodel._fields[field.inverse_name]
+                while inverse.inherited:
+                    # user_id.employee_ids.user_id:
+                    # res_users LEFT JOIN resource_resource as res_users__resource_id
+                    #     ON res_users.id = res_users__resource_id.user_id
+                    # LEFT JOIN hr_employee as res_users__resource_id__employee_ids
+                    #     ON res_users__resource_id.id = res_users__resource_id__employee_ids.resource_id
+                    parent_model = model.env[inverse.related_field.model_name]
+                    parent_fname = comodel._inherits[parent_model._name]
+                    leaf.add_join_context(parent_model, 'id', inverse_name, parent_fname, 'LEFT JOIN')
+                    parent_model._fields[inverse_name]
+                    inverse = parent_model._fields[inverse_name]
+                    inverse_name = parent_fname
+                leaf.add_join_context(comodel, 'id', inverse_name, path[0], 'LEFT JOIN')
                 domain = field.domain(model) if callable(field.domain) else field.domain
                 push(create_substitution_leaf(leaf, (path[1], operator, right), comodel))
                 if domain:
