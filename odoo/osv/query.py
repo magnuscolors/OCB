@@ -142,14 +142,12 @@ class Query(object):
     def get_sql(self):
         """ Returns (query_from, query_where, query_params). """
         from odoo.osv.expression import get_alias_from_query
-        tables_to_process = list(self.tables)
         alias_mapping = self._get_alias_mapping()
         from_clause = []
         from_params = []
 
         def add_joins_for_table(lhs):
             for (rhs, lhs_col, rhs_col, join) in self.joins.get(lhs, []):
-                tables_to_process.remove(alias_mapping[rhs])
                 from_clause.append(' %s %s ON ("%s"."%s" = "%s"."%s"' % \
                     (join, alias_mapping[rhs], lhs, lhs_col, rhs, rhs_col))
                 extra = self.extras.get((lhs, (rhs, lhs_col, rhs_col, join)))
@@ -167,7 +165,7 @@ class Query(object):
             for joined_table in self.joins.values()
             for join in joined_table]
         pos = 0
-        for table in tables_to_process:
+        for table in self.tables:
             table_alias = get_alias_from_query(table)[1]
             if table_alias in joined_aliases:
                 continue
