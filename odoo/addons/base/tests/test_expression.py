@@ -641,6 +641,7 @@ class TestAutoJoin(TransactionCase):
         state_obj = self.env['res.country.state']
         bank_obj = self.env['res.partner.bank']
         user_obj = self.env['res.users']
+        user_env = self.env(user=self.env.ref('base.user_demo'))
 
         # Get test columns
         def patch_auto_join(model, fname, value):
@@ -682,21 +683,28 @@ class TestAutoJoin(TransactionCase):
         self._reinit_mock()
         patch_auto_join(user_obj, 'partner_id', True)
         patch_auto_join(partner_obj, 'company_id', True)
-        self.env['ir.rule'].create({
+        rule = self.env['ir.rule'].create({
             'model_id': self.env.ref('base.model_res_partner').id,
             'name': 'Test inherit auto_join',
             'domain_force': "['|',('company_id','child_of',[user.company_id.id]),('company_id','=',False)]",
         })
-        self.env(user=self.env.ref('base.user_demo'))['res.users'].search([])
+        user_env['res.users'].search([])
+        rule.unlink()
 
         # Test that outer join does not clash with inner join
         rule = self.env['ir.rule'].create({
             'model_id': self.env.ref('base.model_res_users').id,
             'domain_force': ['|', ('partner_id.email', '=', False), ('partner_id.email', '!=', False)],
         })
-        self.env(user=self.env.ref('base.user_demo'))['res.users'].search([('email', 'like', 'something')])
-        self.env(user=self.env.ref('base.user_demo'))['res.users'].search([
+        user_env['res.users'].search([('email', 'like', 'something')])
+        user_env['res.users'].search([
             ('email', 'like', 'something'), ('partner_id.email', 'like', 'something')])
+        rule.unlink()
+
+        # Test a related field on an auto_joined one2many
+        patch_auto_join(user_obj, 'log_ids', True)
+        user_env['res.users'].search([("login_date", ">", '2018-01-01')])
+        patch_auto_join(user_obj, 'log_ids', False)
 
         # Test one2many field with inherited inverse field
         # (like res.users' employee_ids' inverse field 'user_id' is inherited from
